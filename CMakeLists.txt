@@ -6,17 +6,15 @@ find_package(catkin REQUIRED COMPONENTS
   violet_srvs
   dynamic_reconfigure
   pcl_msgs
-  pcl_conversions
   pcl_ros
 )
-find_package(Eigen3 REQUIRED)
 
 generate_dynamic_reconfigure_options(
   cfg/SegmentParams.cfg
 )
 
 catkin_package(
-  CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure violet_msgs violet_srvs pcl_conversions pcl_ros
+  CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure violet_msgs violet_srvs pcl_ros
 )
 
 ###########
@@ -41,9 +39,9 @@ target_link_libraries(euclidean_segmenter ${catkin_LIBRARIES})
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
 
 # Mark executables and/or libraries for installation
-install(TARGETS airlab_segment euclidean_segmenter
- ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
- LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
- RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+#install(TARGETS airlab_segment euclidean_segmenter
+# ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+# LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+# RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+#)
 

@@ -19,7 +19,6 @@
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
 /* PCL - ROS integration */
-#include <pcl_conversions/pcl_conversions.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl_ros/transforms.h>
 /* Own Libs */

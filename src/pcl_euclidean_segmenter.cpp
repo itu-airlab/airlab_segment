@@ -49,18 +49,17 @@ int cluster_min_inliers; // Minimum number of elements in an euclidean segment
 float euclidean_distance_threshold; // The maximum distance threshold for including a point to an eucl. segment
 
 int region_growing_min_inliers; // Minimum number of elements of a segment extracted via reg. grow
-int region_growing_point_color_thresh;
-int region_growing_region_color_thresh;
+int region_growing_point_color_thresh; //The maximum color distance for including a point into a region
+int region_growing_region_color_thresh; // The maximum color distance for merging a region with another
 float region_growing_distance_threshold; // The max distance threshold for including a point to a grown region
-
 
 std::string camera_tf_frame; // TF frame for camera
 std::string world_tf_frame; // TF frame for world, which point clouds transformed to
 
-ros::Publisher vis_cloud_pub;
-ros::Publisher segmented_violet_obj_pub;
+ros::Publisher vis_cloud_pub; // Randomly colored visualization cloud publisher
+ros::Publisher segmented_violet_obj_pub; // Violet object publisher
 
-bool registered_to_violet;
+bool registered_to_violet; // Denotes if the node is registered to violet
 
 static inline void distancePassThruFilter(const CloudType::ConstPtr input, CloudType::Ptr output);
 
@@ -88,7 +87,8 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
 
 void processPointCloud(const CloudType::ConstPtr &input)
 {
-    CloudType::Ptr cloud(new CloudType());
+    CloudType process_cloud;
+    CloudType::Ptr cloud(&process_cloud, emptyDestructorForStack<CloudType>);
     distancePassThruFilter(input, cloud);
 
     pcl::PointCloud<pcl::Label>::Ptr plane_labels (new pcl::PointCloud<pcl::Label>);
@@ -112,7 +112,7 @@ void processPointCloud(const CloudType::ConstPtr &input)
         colorSegmentation(cloud, euclidean_label_indices[i_eucl], color_segmented_indices);
         size_t num_color_segments = color_segmented_indices.size();
 
-        bool color_segments_too_small = color_segmented_indices.size() == 0;
+        bool color_segments_too_small = (color_segmented_indices.size() == 0);
         for (size_t i_color = 0; i_color < num_color_segments; ++i_color) {
             // If there are too few points in any region growing segment reject all (for now)
             if(color_segmented_indices[i_color].indices.size() < region_growing_min_inliers) {

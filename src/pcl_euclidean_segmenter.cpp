@@ -145,9 +145,9 @@ static inline void distancePassThruFilter(const CloudType::ConstPtr input, Cloud
     pass.filter(*output);
 }
 
-void segmentPlanesToExclude(const CloudType::ConstPtr input,
-                            pcl::PointCloud<pcl::Label>::Ptr plane_labels,
-                            std::vector<pcl::PointIndices> &plane_label_indices)
+static inline void segmentPlanesToExclude(const CloudType::ConstPtr input,
+                                          pcl::PointCloud<pcl::Label>::Ptr plane_labels,
+                                          std::vector<pcl::PointIndices> &plane_label_indices)
 {
     static pcl::IntegralImageNormalEstimation<PointType, pcl::Normal> normal_extractor;
     pcl::PointCloud<pcl::Normal> input_normals_cloud;
@@ -295,20 +295,18 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
         extractor.filter(current_segment);
 
         transformPointCloud(current_segment, transformed_segment);
-        Eigen::Vector4f centroid;
         Eigen::Vector4f min, max;
-        pcl::compute3DCentroid (transformed_segment, centroid);
         pcl::getMinMax3D(transformed_segment, min, max);
 
         if(registered_to_violet) {
             violet_msgs::ObjectInfo violet_object;
-            violet_msgs::ObjectProperty size_prop, location_prop;
+            violet_msgs::ObjectProperty size_prop, location_prop, min_prop, max_prop;
 
             location_prop.attribute = "location";
             location_prop.data.resize(3);
-            location_prop.data[0] = centroid[0]; // x
-            location_prop.data[1] = centroid[1]; // y
-            location_prop.data[2] = centroid[2]; // z
+            location_prop.data[0] = max[0] - (max[0] - min[0])/2; // x
+            location_prop.data[1] = max[1] - (max[1] - min[1])/2; // y
+            location_prop.data[2] = max[2] - (max[2] - min[2])/2; // z
             violet_object.properties.push_back(location_prop);
 
             size_prop.attribute = "size";
@@ -316,6 +314,18 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
             size_prop.data.push_back(max[1] - min[1]); // y
             size_prop.data.push_back(max[2] - min[2]); // z
             violet_object.properties.push_back(size_prop);
+
+            min_prop.attribute = "min";
+            min_prop.data.push_back(min[0]); // x
+            min_prop.data.push_back(min[1]); // y
+            min_prop.data.push_back(min[2]); // z
+            violet_object.properties.push_back(min_prop);
+
+            max_prop.attribute = "max";
+            max_prop.data.push_back(max[0]); // x
+            max_prop.data.push_back(max[1]); // y
+            max_prop.data.push_back(max[2]); // z
+            violet_object.properties.push_back(max_prop);
 
             all_detections.objects.push_back(violet_object);
         }

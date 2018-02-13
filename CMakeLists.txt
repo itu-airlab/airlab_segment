@@ -17,6 +17,8 @@ catkin_package(
   CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure violet_msgs violet_srvs pcl_ros
 )
 
+option(ENABLE_LOCATION_POSTFILTERING "Compile segment location postfiltering step" ON)
+
 ###########
 ## Build ##
 ###########
@@ -25,6 +27,10 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
 )
+
+if(ENABLE_LOCATION_POSTFILTERING)
+    add_definitions(-DENABLE_LOCATION_POSTFILTERING)
+endif()
 
 add_executable(euclidean_segmenter src/pcl_euclidean_segmenter.cpp)
 add_dependencies(euclidean_segmenter ${catkin_EXPORTED_TARGETS})

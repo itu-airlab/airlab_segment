@@ -34,6 +34,7 @@ typedef pcl::PointCloud<PointType> CloudType;
 template <typename T>
 static inline void emptyDestructorForStack(const T*) { return; }
 
+namespace parameters {
 /* Topic Parameters */
 std::string input_pc_topic; // PointCloud input topic
 std::string vis_pc_publish_topic; // Visualization PointCloud topic
@@ -42,7 +43,6 @@ std::string violet_publish_topic; // Violet detection info topic
 /* Calculation Parameters */
 float min_depth; // Passthru min depth
 float max_depth; // Passthru max depth
-
 int plane_min_inliers; // Minimum number of inlier points in the plane
 int cluster_max_inliers; // Maximum number of elements in an euclidean segment
 int cluster_min_inliers; // Minimum number of elements in an euclidean segment
@@ -55,6 +55,8 @@ float region_growing_distance_threshold; // The max distance threshold for inclu
 
 std::string camera_tf_frame; // TF frame for camera
 std::string world_tf_frame; // TF frame for world, which point clouds transformed to
+
+}
 
 ros::Publisher vis_cloud_pub; // Randomly colored visualization cloud publisher
 ros::Publisher segmented_violet_obj_pub; // Violet object publisher
@@ -103,8 +105,8 @@ void processPointCloud(const CloudType::ConstPtr &input)
     std::vector<pcl::PointIndices> extracted_segment_indices;
 
     for(size_t i_eucl = 0; i_eucl < num_euclidean_segments; ++i_eucl) {
-        if(euclidean_label_indices[i_eucl].indices.size() > cluster_max_inliers ||
-           euclidean_label_indices[i_eucl].indices.size() < cluster_min_inliers) {
+        if(euclidean_label_indices[i_eucl].indices.size() > parameters::cluster_max_inliers ||
+           euclidean_label_indices[i_eucl].indices.size() < parameters::cluster_min_inliers) {
             continue;
         }
 
@@ -115,7 +117,7 @@ void processPointCloud(const CloudType::ConstPtr &input)
         bool color_segments_too_small = (color_segmented_indices.size() == 0);
         for (size_t i_color = 0; i_color < num_color_segments; ++i_color) {
             // If there are too few points in any region growing segment reject all (for now)
-            if(color_segmented_indices[i_color].indices.size() < region_growing_min_inliers) {
+            if(color_segmented_indices[i_color].indices.size() < parameters::region_growing_min_inliers) {
                 color_segments_too_small = true;
                 break;
             }
@@ -138,7 +140,7 @@ void processPointCloud(const CloudType::ConstPtr &input)
 static inline void distancePassThruFilter(const CloudType::ConstPtr input, CloudType::Ptr output)
 {
     static pcl::PassThrough<PointType> pass;
-    pass.setFilterLimits(min_depth, max_depth);
+    pass.setFilterLimits(parameters::min_depth, parameters::max_depth);
     pass.setFilterFieldName("z");
     pass.setInputCloud(input);
     pass.setKeepOrganized(true);
@@ -192,7 +194,7 @@ void euclideanClusterCloud(const CloudType::ConstPtr input,
         // if the current plane has greater number of points (indices) than `plane_min_inliers`
         // set exclusion true
         size_t sz = plane_label_indices[i].indices.size();
-        excluded_indices[i] = sz > plane_min_inliers;
+        excluded_indices[i] = sz > parameters::plane_min_inliers;
     }
 
     /* This is the compare functor for comparing two points(?) and its compare
@@ -205,7 +207,7 @@ void euclideanClusterCloud(const CloudType::ConstPtr input,
     euclidean_cluster_comparator.setInputCloud(input);
     euclidean_cluster_comparator.setLabels(plane_labels); // set labels from plane segmentation
     euclidean_cluster_comparator.setExcludeLabels(excluded_indices); // set them exclude
-    euclidean_cluster_comparator.setDistanceThreshold(euclidean_distance_threshold, false); // set radius
+    euclidean_cluster_comparator.setDistanceThreshold(parameters::euclidean_distance_threshold, false); // set radius
 
     pcl::OrganizedConnectedComponentSegmentation<PointType, pcl::Label> euclidean_segmentation(euclidean_cluster_comparator_ptr);
     euclidean_segmentation.setInputCloud(input);
@@ -228,10 +230,10 @@ static inline void colorSegmentation(const CloudType::ConstPtr input,
     reg_grow.setInputCloud(input);
     reg_grow.setIndices(roi_indices_ptr);
     reg_grow.setSearchMethod(search_tree);
-    reg_grow.setDistanceThreshold(region_growing_distance_threshold);
-    reg_grow.setPointColorThreshold(region_growing_point_color_thresh);
-    reg_grow.setRegionColorThreshold(region_growing_region_color_thresh);
-    reg_grow.setMinClusterSize(region_growing_min_inliers);
+    reg_grow.setDistanceThreshold(parameters::region_growing_distance_threshold);
+    reg_grow.setPointColorThreshold(parameters::region_growing_point_color_thresh);
+    reg_grow.setRegionColorThreshold(parameters::region_growing_region_color_thresh);
+    reg_grow.setMinClusterSize(parameters::region_growing_min_inliers);
 
     reg_grow.extract(color_segment_indices);
 }
@@ -254,30 +256,52 @@ static inline void colorizeCloud(CloudType &cloud)
 static inline bool transformPointCloud(const CloudType &input, CloudType &output)
 {
     static tf::TransformListener tf_listener;
-    return pcl_ros::transformPointCloud(world_tf_frame, input, output, tf_listener);
+    return pcl_ros::transformPointCloud(parameters::world_tf_frame, input, output, tf_listener);
 }
 
-void pointCloudCallback(const CloudType::ConstPtr &msg_cloud)
+
+
+#ifdef ENABLE_LOCATION_POSTFILTERING
+
+namespace parameters {
+Eigen::Vector4f post_filtering_region_min_pt; // Filtering region starting point
+Eigen::Vector4f post_filtering_region_max_pt; // Filtering region ending point
+double postfilter_single_axis_allowance; // How much excess space in a axis counted "in" region
+double postfilter_volume_intersection_threshold; // Minimum volumetric intersection with region
+}
+
+static inline bool checkRangesOverlap(double range1_start, double range1_end,
+                                      double range2_start, double range2_end)
 {
-   processPointCloud(msg_cloud);
+    return (range2_start <= range1_end + parameters::postfilter_single_axis_allowance) &&
+           (range1_start <= range2_end + parameters::postfilter_single_axis_allowance);
 }
 
-void dynamicConfigCallback(airlab_segment::SegmentParamsConfig &config, uint32_t)
+static inline double oneDIntersectionRate(double range1_start, double range1_end,
+                                           double range2_start, double range2_end)
 {
-    euclidean_clustering::min_depth = config.filter_min_depth;
-    euclidean_clustering::max_depth = config.filter_max_depth;
-
-    euclidean_clustering::plane_min_inliers   = config.plane_min_inliers;
-    euclidean_clustering::cluster_min_inliers = config.cluster_min_inliers;
-    euclidean_clustering::cluster_max_inliers = config.cluster_max_inliers;
-
-    euclidean_clustering::euclidean_distance_threshold = config.euclidean_distance_threshold;
-
-    euclidean_clustering::region_growing_min_inliers         = config.region_growing_min_inliers;
-    euclidean_clustering::region_growing_point_color_thresh  = config.region_growing_point_color_thresh;
-    euclidean_clustering::region_growing_region_color_thresh = config.region_growing_region_color_thresh;
-    euclidean_clustering::region_growing_distance_threshold  = config.region_growing_distance_threshold;
+    double intersection = std::min(range1_end, range2_end) - std::max(range1_start, range2_start);
+    double smaller_range   = std::min(range1_end - range1_start, range2_end - range2_start);
+    return (intersection / smaller_range);
 }
+
+static inline double objectRegionIntersectionRate(Eigen::Vector4f segment_min, Eigen::Vector4f segment_max)
+{
+    using namespace parameters;
+    bool intersectX = checkRangesOverlap(post_filtering_region_min_pt[0], post_filtering_region_max_pt[0], segment_min[0], segment_max[0]);
+    double rateX = oneDIntersectionRate(post_filtering_region_min_pt[0], post_filtering_region_max_pt[0], segment_min[0], segment_max[0]);
+
+    bool intersectY = checkRangesOverlap(post_filtering_region_min_pt[1], post_filtering_region_max_pt[1], segment_min[1], segment_max[1]);
+    double rateY = oneDIntersectionRate(post_filtering_region_min_pt[1], post_filtering_region_max_pt[1], segment_min[1], segment_max[1]);
+
+    bool intersectZ = checkRangesOverlap(post_filtering_region_min_pt[2], post_filtering_region_max_pt[2], segment_min[2], segment_max[2]);
+    double rateZ = oneDIntersectionRate(post_filtering_region_min_pt[2], post_filtering_region_max_pt[2], segment_min[2], segment_max[2]);
+
+    return (intersectX ? rateX : 0.0) *
+           (intersectY ? rateY : 0.0) *
+           (intersectZ ? rateZ : 0.0);
+}
+#endif
 
 static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::vector<pcl::PointIndices> extracted_segment_indices)
 {
@@ -295,36 +319,42 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
         extractor.filter(current_segment);
 
         transformPointCloud(current_segment, transformed_segment);
-        Eigen::Vector4f min, max;
-        pcl::getMinMax3D(transformed_segment, min, max);
+        Eigen::Vector4f min_pt, max_pt;
+        pcl::getMinMax3D(transformed_segment, min_pt, max_pt);
 
+#ifdef ENABLE_LOCATION_POSTFILTERING
+        double intersection_rate = objectRegionIntersectionRate(min_pt, max_pt);
+        if(intersection_rate < parameters::postfilter_volume_intersection_threshold ) {
+            continue;
+        }
+#endif
         if(registered_to_violet) {
             violet_msgs::ObjectInfo violet_object;
             violet_msgs::ObjectProperty size_prop, location_prop, min_prop, max_prop;
 
             location_prop.attribute = "location";
             location_prop.data.resize(3);
-            location_prop.data[0] = max[0] - (max[0] - min[0])/2; // x
-            location_prop.data[1] = max[1] - (max[1] - min[1])/2; // y
-            location_prop.data[2] = max[2] - (max[2] - min[2])/2; // z
+            location_prop.data[0] = max_pt[0] - (max_pt[0] - min_pt[0])/2; // x
+            location_prop.data[1] = max_pt[1] - (max_pt[1] - min_pt[1])/2; // y
+            location_prop.data[2] = max_pt[2] - (max_pt[2] - min_pt[2])/2; // z
             violet_object.properties.push_back(location_prop);
 
             size_prop.attribute = "size";
-            size_prop.data.push_back(max[0] - min[0]); // x
-            size_prop.data.push_back(max[1] - min[1]); // y
-            size_prop.data.push_back(max[2] - min[2]); // z
+            size_prop.data.push_back(max_pt[0] - min_pt[0]); // x
+            size_prop.data.push_back(max_pt[1] - min_pt[1]); // y
+            size_prop.data.push_back(max_pt[2] - min_pt[2]); // z
             violet_object.properties.push_back(size_prop);
 
             min_prop.attribute = "min";
-            min_prop.data.push_back(min[0]); // x
-            min_prop.data.push_back(min[1]); // y
-            min_prop.data.push_back(min[2]); // z
+            min_prop.data.push_back(min_pt[0]); // x
+            min_prop.data.push_back(min_pt[1]); // y
+            min_prop.data.push_back(min_pt[2]); // z
             violet_object.properties.push_back(min_prop);
 
             max_prop.attribute = "max";
-            max_prop.data.push_back(max[0]); // x
-            max_prop.data.push_back(max[1]); // y
-            max_prop.data.push_back(max[2]); // z
+            max_prop.data.push_back(max_pt[0]); // x
+            max_prop.data.push_back(max_pt[1]); // y
+            max_prop.data.push_back(max_pt[2]); // z
             violet_object.properties.push_back(max_prop);
 
             all_detections.objects.push_back(violet_object);
@@ -336,16 +366,54 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
 
     sensor_msgs::PointCloud2 vis_cloud_ros;
     pcl::toROSMsg(vis_point_cloud, vis_cloud_ros);
-    vis_cloud_ros.header.frame_id = camera_tf_frame; //FIXME: Transform and publish in world frame
+    vis_cloud_ros.header.frame_id = parameters::camera_tf_frame;
     vis_cloud_pub.publish(vis_cloud_ros);
 
     if(registered_to_violet) {
-        all_detections.header.frame_id = world_tf_frame;
+        all_detections.header.frame_id = parameters::world_tf_frame;
         all_detections.header.stamp = ros::Time::now();
         segmented_violet_obj_pub.publish(all_detections);
     }
 
 }
+
+
+void pointCloudCallback(const CloudType::ConstPtr &msg_cloud)
+{
+   processPointCloud(msg_cloud);
+}
+
+void dynamicConfigCallback(airlab_segment::SegmentParamsConfig &config, uint32_t)
+{
+    using namespace parameters;
+    min_depth = config.groups.passthrough_prefiltering.passthrough_min_depth;
+    max_depth = config.groups.passthrough_prefiltering.passthrough_max_depth;
+
+    plane_min_inliers   = config.groups.multiplane_segmentation.plane_min_inliers;
+
+    euclidean_distance_threshold = config.groups.euclidean_clustering.cluster_distance_threshold;
+    cluster_min_inliers = config.groups.euclidean_clustering.cluster_min_inliers;
+    cluster_max_inliers = config.groups.euclidean_clustering.cluster_max_inliers;
+
+    region_growing_min_inliers         = config.groups.region_growing_segmentation.region_growing_min_inliers;
+    region_growing_point_color_thresh  = config.groups.region_growing_segmentation.region_growing_point_color_threshold;
+    region_growing_region_color_thresh = config.groups.region_growing_segmentation.region_growing_region_color_threshold;
+    region_growing_distance_threshold  = config.groups.region_growing_segmentation.region_growing_distance_threshold;
+
+#ifdef ENABLE_LOCATION_POSTFILTERING
+    post_filtering_region_min_pt = Eigen::Vector4f(config.groups.segment_location_postfiltering.post_filtering_min_point_x,
+                                                   config.groups.segment_location_postfiltering.post_filtering_min_point_y,
+                                                   config.groups.segment_location_postfiltering.post_filtering_min_point_z,
+                                                   0.0);
+    post_filtering_region_max_pt = Eigen::Vector4f(config.groups.segment_location_postfiltering.post_filtering_max_point_x,
+                                                   config.groups.segment_location_postfiltering.post_filtering_max_point_y,
+                                                   config.groups.segment_location_postfiltering.post_filtering_max_point_z,
+                                                   0.0);
+    postfilter_volume_intersection_threshold = config.groups.segment_location_postfiltering.post_filtering_volume_intersection_threshold;
+    postfilter_single_axis_allowance = config.groups.segment_location_postfiltering.post_filtering_single_axis_intersection_allowance;
+#endif
+}
+
 
 }
 
@@ -356,9 +424,9 @@ int main(int argc, char *argv[])
     ros::NodeHandle loc_nh("~");
 
     /* Read Params */
-    euclidean_clustering::input_pc_topic = loc_nh.param<std::string>("input_cloud_topic", "camera/depth_registered/points");
-    euclidean_clustering::camera_tf_frame = loc_nh.param<std::string>("camera_tf_frame", "camera_rgb_optical_frame");
-    euclidean_clustering::world_tf_frame = loc_nh.param<std::string>("world_tf_frame", "world");
+    euclidean_clustering::parameters::input_pc_topic = loc_nh.param<std::string>("input_cloud_topic", "camera/depth_registered/points");
+    euclidean_clustering::parameters::camera_tf_frame = loc_nh.param<std::string>("camera_tf_frame", "camera_rgb_optical_frame");
+    euclidean_clustering::parameters::world_tf_frame = loc_nh.param<std::string>("world_tf_frame", "world");
     bool register_violet = loc_nh.param<bool>("register_to_violet", true);
 
     /* Initialize Dynamic reconfigure Server */
@@ -367,7 +435,7 @@ int main(int argc, char *argv[])
 
 
     if(register_violet) {
-        euclidean_clustering::violet_publish_topic = loc_nh.param<std::string>("violet_detections_topic", "segment_detections");
+        euclidean_clustering::parameters::violet_publish_topic = loc_nh.param<std::string>("violet_detections_topic", "segment_detections");
         ROS_INFO("Waiting for Violet starts up");
         bool service_exists;
         for ( int i = 0; i < 3 && !(service_exists = ros::service::exists("/violet_node/register_source", false)); ++i) { ros::Duration(1).sleep(); }
@@ -376,19 +444,19 @@ int main(int argc, char *argv[])
             ros::ServiceClient registrationClient = nh.serviceClient<violet_srvs::RegisterSource>("/violet_node/register_source");
             violet_srvs::RegisterSource register_srv;
 
-            register_srv.request.topic_name = euclidean_clustering::violet_publish_topic;
+            register_srv.request.topic_name = euclidean_clustering::parameters::violet_publish_topic;
             register_srv.request.source_algorithm_name = "Segmentation";
             euclidean_clustering::registered_to_violet = registrationClient.call(register_srv);
             ROS_INFO("Violet registration is %s ", (euclidean_clustering::registered_to_violet ? "successful" : "unsucessful") );
         }
     }
 
-    euclidean_clustering::vis_pc_publish_topic = loc_nh.param<std::string>("visualization_cloud_topic", "segmented_cloud");
-    euclidean_clustering::vis_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>(euclidean_clustering::vis_pc_publish_topic, 10);
+    euclidean_clustering::parameters::vis_pc_publish_topic = loc_nh.param<std::string>("visualization_cloud_topic", "segmented_cloud");
+    euclidean_clustering::vis_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>(euclidean_clustering::parameters::vis_pc_publish_topic, 10);
     if(euclidean_clustering::registered_to_violet) {
-        euclidean_clustering::segmented_violet_obj_pub = nh.advertise<violet_msgs::DetectionInfo>(euclidean_clustering::violet_publish_topic, 10);
+        euclidean_clustering::segmented_violet_obj_pub = nh.advertise<violet_msgs::DetectionInfo>(euclidean_clustering::parameters::violet_publish_topic, 10);
     }
-    ros::Subscriber sub = nh.subscribe(euclidean_clustering::input_pc_topic, 1, euclidean_clustering::pointCloudCallback);
+    ros::Subscriber sub = nh.subscribe(euclidean_clustering::parameters::input_pc_topic, 1, euclidean_clustering::pointCloudCallback);
 
     ros::spin();
     return 0;

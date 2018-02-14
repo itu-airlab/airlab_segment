@@ -433,6 +433,7 @@ int main(int argc, char *argv[])
     euclidean_clustering::parameters::camera_tf_frame = loc_nh.param<std::string>("camera_tf_frame", "camera_rgb_optical_frame");
     euclidean_clustering::parameters::world_tf_frame = loc_nh.param<std::string>("world_tf_frame", "world");
     bool register_violet = loc_nh.param<bool>("register_to_violet", true);
+    std::string violet_ns = loc_nh.param<std::string>("violet_namespace", "violet");
 
     /* Initialize Dynamic reconfigure Server */
     dynamic_reconfigure::Server<airlab_segment::SegmentParamsConfig> server;
@@ -443,10 +444,10 @@ int main(int argc, char *argv[])
         euclidean_clustering::parameters::violet_publish_topic = loc_nh.param<std::string>("violet_detections_topic", "segment_detections");
         ROS_INFO("Waiting for Violet starts up");
         bool service_exists;
-        for ( int i = 0; i < 3 && !(service_exists = ros::service::exists("/violet_node/register_source", false)); ++i) { ros::Duration(1).sleep(); }
+        for ( int i = 0; i < 3 && !(service_exists = ros::service::exists(violet_ns + "/register_source", false)); ++i) { ros::Duration(1).sleep(); }
 
         if(service_exists) {
-            ros::ServiceClient registrationClient = nh.serviceClient<violet_srvs::RegisterSource>("/violet_node/register_source");
+            ros::ServiceClient registrationClient = nh.serviceClient<violet_srvs::RegisterSource>(violet_ns + "/register_source");
             violet_srvs::RegisterSource register_srv;
 
             register_srv.request.topic_name = euclidean_clustering::parameters::violet_publish_topic;

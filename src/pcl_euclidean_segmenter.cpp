@@ -330,7 +330,8 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
 #endif
         if(registered_to_violet) {
             violet_msgs::ObjectInfo violet_object;
-            violet_msgs::ObjectProperty size_prop, location_prop, min_prop, max_prop;
+            violet_msgs::ObjectProperty size_prop, location_prop,
+                                        min_prop, max_prop, sensor_frame;
 
             location_prop.attribute = "location";
             location_prop.data.resize(3);
@@ -356,6 +357,10 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
             max_prop.data.push_back(max_pt[1]); // y
             max_prop.data.push_back(max_pt[2]); // z
             violet_object.properties.push_back(max_prop);
+
+            sensor_frame.attribute = "sensor_frame";
+            sensor_frame.values.push_back(parameters::camera_tf_frame);
+            violet_object.properties.push_back(sensor_frame);
 
             all_detections.objects.push_back(violet_object);
         }

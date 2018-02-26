@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 /* ROS */
 #include <ros/ros.h>
 #include <tf/tf.h>
@@ -316,6 +317,89 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
         extractor.setKeepOrganized(true);
         extractor.filter(current_segment);
 
+        struct { long long r, g, b; double norm_r, norm_g, norm_b; long long h, s, v; } average_color;
+        average_color.r = 0;
+        average_color.g = 0;
+        average_color.b = 0;
+
+        long long non_nan_points = 0;
+
+        for(CloudType::const_iterator pt_it = current_segment.begin(), pt_end = current_segment.end(); pt_it != pt_end; ++pt_it ) {
+            const PointType& cur_pt = *pt_it;
+            //is nan aka not equal itself
+            if(cur_pt.x != cur_pt.x || cur_pt.y != cur_pt.y || cur_pt.z != cur_pt.z) {
+                continue;
+            }
+            average_color.r += cur_pt.r;
+            average_color.g += cur_pt.g;
+            average_color.b += cur_pt.b;
+            non_nan_points++;
+        }
+        average_color.r /= non_nan_points;
+        average_color.g /= non_nan_points;
+        average_color.b /= non_nan_points;
+
+        average_color.norm_r = static_cast<double>(average_color.r) / 255.0;
+        average_color.norm_g = static_cast<double>(average_color.g) / 255.0;
+        average_color.norm_b = static_cast<double>(average_color.b) / 255.0;
+
+        long long rgb_max = std::max(average_color.r, std::max(average_color.g, average_color.b));
+        long long rgb_min = std::min(average_color.r, std::min(average_color.g, average_color.b));
+        long long rgb_delta = rgb_max - rgb_min;
+        double norm_delta = static_cast<double>(rgb_delta) / 255.0;
+
+        if(rgb_delta > 0) {
+            double norm_h;
+            if(rgb_max == average_color.r) {
+                norm_h = std::fmod((average_color.norm_g - average_color.norm_b) / norm_delta, 6);
+                average_color.s = rgb_delta / average_color.norm_r;
+            }
+            else if(rgb_max == average_color.b) {
+                norm_h = 2 + ((average_color.norm_b - average_color.norm_r) / norm_delta);
+                average_color.s = rgb_delta / average_color.norm_g;
+            }
+            else {
+                norm_h = 4 + ((average_color.norm_r - average_color.norm_g) / norm_delta);
+                average_color.s = rgb_delta / average_color.norm_b;
+            }
+            average_color.h = norm_h * 60.0;
+        }
+        else {
+            //Colorless
+            average_color.h = 0;
+            average_color.s = 0;
+        }
+        average_color.v = rgb_max;
+
+        std::string color_name;
+        if(average_color.s > 80) {
+            if(average_color.h < 30) {
+                color_name = "red";
+            }
+            else if(average_color.h < 75) {
+                color_name = "yellow";
+            }
+            else if(average_color.h < 200) {
+                color_name = "green";
+            }
+            else if(average_color.h < 270) {
+                color_name = "blue";
+            }
+            else {
+                color_name = "red";
+            }
+        }
+        else {
+            if(average_color.v < 30) {
+                color_name = "black";
+            }
+            else if(average_color.v < 200) {
+                color_name = "grey";
+            }
+            else {
+                color_name = "white";
+            }
+        }
         transformPointCloud(current_segment, transformed_segment);
         Eigen::Vector4f min_pt, max_pt;
         pcl::getMinMax3D(transformed_segment, min_pt, max_pt);
@@ -329,7 +413,8 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
         if(registered_to_violet) {
             violet_msgs::ObjectInfo violet_object;
             violet_msgs::ObjectProperty size_prop, location_prop,
-                                        min_prop, max_prop, sensor_frame;
+                                        min_prop, max_prop, sensor_frame,
+                                        color_values_prop, color_values_hsv_prop, color_name_prop;
 
             location_prop.attribute = "location";
             location_prop.data.resize(3);
@@ -356,14 +441,30 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
             max_prop.data.push_back(max_pt[2]); // z
             violet_object.properties.push_back(max_prop);
 
+            color_values_prop.attribute = "color_values";
+            color_values_prop.data.push_back(average_color.r);
+            color_values_prop.data.push_back(average_color.g);
+            color_values_prop.data.push_back(average_color.b);
+            violet_object.properties.push_back(color_values_prop);
+
+            color_values_hsv_prop.attribute = "color_values_hsv";
+            color_values_hsv_prop.data.push_back(average_color.h);
+            color_values_hsv_prop.data.push_back(average_color.s);
+            color_values_hsv_prop.data.push_back(average_color.v);
+            violet_object.properties.push_back(color_values_hsv_prop);
+
             sensor_frame.attribute = "sensor_frame";
             sensor_frame.values.push_back(parameters::camera_tf_frame);
             violet_object.properties.push_back(sensor_frame);
 
+            color_name_prop.attribute = "color_name";
+            color_name_prop.values.push_back(color_name);
+            violet_object.properties.push_back(color_name_prop);
+
             all_detections.objects.push_back(violet_object);
         }
 
-        colorizeCloud(current_segment);
+        //colorizeCloud(current_segment);
         vis_point_cloud += current_segment;
     }
 

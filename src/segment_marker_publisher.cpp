@@ -15,6 +15,7 @@ struct CallbackFunctor
         tf::Point size;
         tf::Point max_point;
         tf::Point min_point;
+        struct {int r; int g; int b;} color;
     };
 
     static std::unordered_map<std::string, tf::Point> cached_object_sizes;
@@ -63,6 +64,11 @@ void CallbackFunctor::callback(const violet_msgs::DetectionInfo::ConstPtr &msg)
                 tf::Point min_pt(current_prop.data[0], current_prop.data[1], current_prop.data[2]);
                 to_add.min_point = min_pt;
             }
+            else if (current_prop.attribute == "color_values") {
+                to_add.color.r = current_prop.data[0];
+                to_add.color.g = current_prop.data[1];
+                to_add.color.b = current_prop.data[2];
+            }
         }
         objects.push_back(to_add);
     }
@@ -102,9 +108,9 @@ void CallbackFunctor::publishMarkers()
         bounding_box.pose.orientation.z = 0.0;
         bounding_box.pose.orientation.w = 1.0;
 
-        bounding_box.color.r = 1.0;
-        bounding_box.color.g = 0.64;
-        bounding_box.color.b = 0.64;
+        bounding_box.color.r = double(obj.color.r)/255;
+        bounding_box.color.g = double(obj.color.g)/255;
+        bounding_box.color.b = double(obj.color.b)/255;
         bounding_box.color.a = 0.5;
 
         marr.markers.push_back(bounding_box);

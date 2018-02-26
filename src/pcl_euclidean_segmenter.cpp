@@ -259,8 +259,6 @@ static inline bool transformPointCloud(const CloudType &input, CloudType &output
     return pcl_ros::transformPointCloud(parameters::world_tf_frame, input, output, tf_listener);
 }
 
-
-
 #ifdef ENABLE_LOCATION_POSTFILTERING
 
 namespace parameters {

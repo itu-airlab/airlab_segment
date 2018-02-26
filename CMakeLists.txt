@@ -7,6 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   dynamic_reconfigure
   pcl_msgs
   pcl_ros
+  tf
 )
 
 generate_dynamic_reconfigure_options(
@@ -14,7 +15,7 @@ generate_dynamic_reconfigure_options(
 )
 
 catkin_package(
-  CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure violet_msgs violet_srvs pcl_ros
+  CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure violet_msgs violet_srvs pcl_ros tf
 )
 
 option(ENABLE_LOCATION_POSTFILTERING "Compile segment location postfiltering step" ON)
@@ -35,6 +36,11 @@ endif()
 add_executable(euclidean_segmenter src/pcl_euclidean_segmenter.cpp)
 add_dependencies(euclidean_segmenter ${catkin_EXPORTED_TARGETS})
 target_link_libraries(euclidean_segmenter ${catkin_LIBRARIES})
+
+add_executable(segment_marker_publisher src/segment_marker_publisher.cpp)
+set_property(SOURCE src/segment_marker_publisher.cpp APPEND_STRING PROPERTY COMPILE_FLAGS "-std=c++11")
+add_dependencies(segment_marker_publisher ${catkin_EXPORTED_TARGETS})
+target_link_libraries(segment_marker_publisher ${catkin_LIBRARIES})
 
 
 #############

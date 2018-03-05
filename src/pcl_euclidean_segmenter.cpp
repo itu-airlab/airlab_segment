@@ -1,6 +1,9 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+/* Boost */
+#include <boost/chrono.hpp>
+#include <boost/thread/thread.hpp>
 /* ROS */
 #include <ros/ros.h>
 #include <tf/tf.h>
@@ -543,7 +546,7 @@ int main(int argc, char *argv[])
         euclidean_clustering::parameters::violet_publish_topic = loc_nh.param<std::string>("violet_detections_topic", "segment_detections");
         ROS_INFO("Waiting for Violet starts up");
         bool service_exists;
-        for ( int i = 0; i < 3 && !(service_exists = ros::service::exists(violet_ns + "/register_source", false)); ++i) { ros::Duration(1).sleep(); }
+        for ( int i = 0; i < 3 && !(service_exists = ros::service::exists(violet_ns + "/register_source", false)); ++i) { boost::this_thread::sleep_for(boost::chrono::milliseconds(200)); }
 
         if(service_exists) {
             ros::ServiceClient registrationClient = nh.serviceClient<violet_srvs::RegisterSource>(violet_ns + "/register_source");

@@ -338,6 +338,11 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
             average_color.b += cur_pt.b;
             non_nan_points++;
         }
+
+        if(non_nan_points <= 0) {
+            continue;
+        }
+
         average_color.r /= non_nan_points;
         average_color.g /= non_nan_points;
         average_color.b /= non_nan_points;
@@ -403,6 +408,7 @@ static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::v
                 color_name = "white";
             }
         }
+
         transformPointCloud(current_segment, transformed_segment);
         Eigen::Vector4f min_pt, max_pt;
         pcl::getMinMax3D(transformed_segment, min_pt, max_pt);

@@ -1,0 +1,10 @@
+\subsubsection parameters ROS parameters
+
+Reads and maintains the following parameters on the ROS server
+
+- \b "~cloud_in" : \b [str] Input cloud min: , default: /camera/depth/points, max: 
+- \b "~plane_min_inliers" : \b [int] Min plane inliers min: 1000, default: 10000, max: 50000
+- \b "~cluster_min_inliers" : \b [int] Min cluster inliers min: 10, default: 200, max: 5000
+- \b "~cluster_max_inliers" : \b [int] Max cluster inliers min: 100, default: 15000, max: 20000
+- \b "~max_z" : \b [double] Z filter min: 0.7, default: 3.0, max: 5.0
+

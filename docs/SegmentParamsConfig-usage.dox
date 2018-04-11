@@ -1,0 +1,11 @@
+\subsubsection usage Usage
+\verbatim
+<node name="airlab_segment" pkg="airlab_segment" type="airlab_segment">
+  <param name="cloud_in" type="str" value="/camera/depth/points" />
+  <param name="plane_min_inliers" type="int" value="10000" />
+  <param name="cluster_min_inliers" type="int" value="200" />
+  <param name="cluster_max_inliers" type="int" value="15000" />
+  <param name="max_z" type="double" value="3.0" />
+</node>
+\endverbatim
+

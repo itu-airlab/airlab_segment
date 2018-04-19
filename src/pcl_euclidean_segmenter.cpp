@@ -107,7 +107,7 @@ static inline void colorizeCloud(CloudType& cloud);
 
 static inline bool transformPointCloud(const CloudType &input, CloudType &output);
 
-static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::vector<pcl::PointIndices> extracted_segment_indices);
+static inline void publishSegments(const CloudType::ConstPtr cloud, const std::vector<pcl::PointIndices> extracted_segment_indices);
 
 
 void processPointCloud(const CloudType::ConstPtr &input)
@@ -324,7 +324,7 @@ static inline double objectRegionIntersectionRate(Eigen::Vector4f segment_min, E
 }
 #endif
 
-static inline bool publishSegments(const CloudType::ConstPtr cloud, const std::vector<pcl::PointIndices> extracted_segment_indices)
+static inline void publishSegments(const CloudType::ConstPtr cloud, const std::vector<pcl::PointIndices> extracted_segment_indices)
 {
     violet_msgs::DetectionInfo all_detections;
     CloudType vis_point_cloud;

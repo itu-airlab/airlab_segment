@@ -111,7 +111,6 @@ static inline bool transformPointCloud(const CloudType &input, CloudType &output
 
 static inline void publishSegments(const CloudType::ConstPtr cloud, const std::vector<pcl::PointIndices> extracted_segment_indices);
 
-
 void processPointCloud(const CloudType::ConstPtr &input)
 {
     CloudType process_cloud;
@@ -159,12 +158,11 @@ void processPointCloud(const CloudType::ConstPtr &input)
     }
 
     publishSegments(cloud, extracted_segment_indices);
-
 }
 
 static inline void distancePassThruFilter(const CloudType::ConstPtr input, CloudType::Ptr output)
 {
-    static pcl::PassThrough<PointType> pass;
+    static thread_local pcl::PassThrough<PointType> pass;
     pass.setFilterLimits(parameters::min_depth, parameters::max_depth);
     pass.setFilterFieldName("z");
     pass.setInputCloud(input);
@@ -176,7 +174,7 @@ static inline void segmentPlanesToExclude(const CloudType::ConstPtr input,
                                           pcl::PointCloud<pcl::Label>::Ptr plane_labels,
                                           std::vector<pcl::PointIndices> &plane_label_indices)
 {
-    static pcl::IntegralImageNormalEstimation<PointType, pcl::Normal> normal_extractor;
+    static thread_local pcl::IntegralImageNormalEstimation<PointType, pcl::Normal> normal_extractor;
     pcl::PointCloud<pcl::Normal> input_normals_cloud;
     pcl::PointCloud<pcl::Normal>::Ptr input_normals_ptr (&input_normals_cloud, emptyDestructorForStack<pcl::PointCloud<pcl::Normal> >);
     normal_extractor.setInputCloud(input);
@@ -190,7 +188,7 @@ static inline void segmentPlanesToExclude(const CloudType::ConstPtr input,
     std::vector<pcl::PointIndices> plane_point_indices;
     std::vector<pcl::PointIndices> boundary_indices;
 
-    static pcl::OrganizedMultiPlaneSegmentation<PointType, pcl::Normal, pcl::Label> multi_plane_segmenter;
+    static thread_local pcl::OrganizedMultiPlaneSegmentation<PointType, pcl::Normal, pcl::Label> multi_plane_segmenter;
 
     multi_plane_segmenter.setDistanceThreshold(0.03);
     multi_plane_segmenter.setInputCloud(input);
@@ -226,7 +224,7 @@ void euclideanClusterCloud(const CloudType::ConstPtr input,
      * function returns true when two points are close to each other smaller than a
      * radius
      */
-    static pcl::EuclideanClusterComparator<PointType, pcl::Normal, pcl::Label> euclidean_cluster_comparator;
+    static thread_local pcl::EuclideanClusterComparator<PointType, pcl::Normal, pcl::Label> euclidean_cluster_comparator;
     pcl::EuclideanClusterComparator<PointType, pcl::Normal, pcl::Label>::Ptr euclidean_cluster_comparator_ptr(&euclidean_cluster_comparator,
                                                                                                               emptyDestructorForStack<pcl::EuclideanClusterComparator<PointType, pcl::Normal, pcl::Label> >);
     euclidean_cluster_comparator.setInputCloud(input);

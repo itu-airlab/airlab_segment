@@ -79,6 +79,8 @@ float region_growing_distance_threshold; // The max distance threshold for inclu
 std::string camera_tf_frame; // TF frame for camera
 std::string world_tf_frame; // TF frame for world, which point clouds transformed to
 
+int thread_count; // Number of spinning threads
+int queue_size;  // Point cloud queue size
 }
 
 ros::Publisher vis_cloud_pub; // Randomly colored visualization cloud publisher
@@ -570,6 +572,8 @@ int main(int argc, char *argv[])
     euclidean_clustering::parameters::input_pc_topic = loc_nh.param<std::string>("input_cloud_topic", "camera/depth_registered/points");
     euclidean_clustering::parameters::camera_tf_frame = loc_nh.param<std::string>("camera_tf_frame", "camera_rgb_optical_frame");
     euclidean_clustering::parameters::world_tf_frame = loc_nh.param<std::string>("world_tf_frame", "world");
+    euclidean_clustering::parameters::thread_count = loc_nh.param<int>("thread_count", 4);
+    euclidean_clustering::parameters::queue_size = loc_nh.param<int>("queue_size", 8);
     bool register_violet = loc_nh.param<bool>("register_to_violet", true);
     std::string violet_ns = loc_nh.param<std::string>("violet_namespace", "violet");
 
@@ -600,8 +604,9 @@ int main(int argc, char *argv[])
     if(euclidean_clustering::registered_to_violet) {
         euclidean_clustering::segmented_violet_obj_pub = nh.advertise<violet_msgs::DetectionInfo>(euclidean_clustering::parameters::violet_publish_topic, 10);
     }
-    ros::Subscriber sub = nh.subscribe(euclidean_clustering::parameters::input_pc_topic, 1, euclidean_clustering::pointCloudCallback);
+    ros::Subscriber sub = nh.subscribe(euclidean_clustering::parameters::input_pc_topic, euclidean_clustering::parameters::queue_size, euclidean_clustering::pointCloudCallback);
 
-    ros::spin();
+    ros::MultiThreadedSpinner spinner(euclidean_clustering::parameters::thread_count);
+    spinner.spin();
     return 0;
 }

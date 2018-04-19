@@ -330,6 +330,12 @@ static inline void publishSegments(const CloudType::ConstPtr cloud, const std::v
     CloudType vis_point_cloud;
     pcl::ExtractIndices<PointType> extractor;
     size_t num_total_segments = extracted_segment_indices.size();
+
+    if(cloud->empty()) {
+        ROS_WARN("WTF: Cloud is empty! Skipping");
+        return;
+    }
+
     // Run for all detected segments
     for (size_t i_segm = 0; i_segm < num_total_segments; ++i_segm) {
         CloudType current_segment, transformed_segment;
@@ -338,6 +344,11 @@ static inline void publishSegments(const CloudType::ConstPtr cloud, const std::v
         extractor.setIndices(indice_ptr);
         extractor.setKeepOrganized(true);
         extractor.filter(current_segment);
+
+        if(current_segment.empty()) {
+            ROS_WARN("Current segment is empty! Skipping");
+            continue;
+        }
 
         struct { long long r, g, b; double norm_r, norm_g, norm_b; long long h, s, v; } average_color;
         average_color.r = 0;

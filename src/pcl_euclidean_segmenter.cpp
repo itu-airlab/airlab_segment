@@ -49,7 +49,7 @@
 #include <violet_msgs/DetectionInfo.h>
 #include <violet_srvs/RegisterSource.h>
 
-namespace euclidean_clustering {
+namespace {
 /* Definitions */
 typedef pcl::PointXYZRGBA PointType; // NEVER USE PointXYZRGB PCL shits on his pants
 typedef pcl::PointCloud<PointType> CloudType;
@@ -569,44 +569,44 @@ int main(int argc, char *argv[])
     ros::NodeHandle loc_nh("~");
 
     /* Read Params */
-    euclidean_clustering::parameters::input_pc_topic = loc_nh.param<std::string>("input_cloud_topic", "camera/depth_registered/points");
-    euclidean_clustering::parameters::camera_tf_frame = loc_nh.param<std::string>("camera_tf_frame", "camera_rgb_optical_frame");
-    euclidean_clustering::parameters::world_tf_frame = loc_nh.param<std::string>("world_tf_frame", "world");
-    euclidean_clustering::parameters::thread_count = loc_nh.param<int>("thread_count", 4);
-    euclidean_clustering::parameters::queue_size = loc_nh.param<int>("queue_size", 8);
+    parameters::input_pc_topic = loc_nh.param<std::string>("input_cloud_topic", "camera/depth_registered/points");
+    parameters::camera_tf_frame = loc_nh.param<std::string>("camera_tf_frame", "camera_rgb_optical_frame");
+    parameters::world_tf_frame = loc_nh.param<std::string>("world_tf_frame", "world");
+    parameters::thread_count = loc_nh.param<int>("thread_count", 4);
+    parameters::queue_size = loc_nh.param<int>("queue_size", 8);
     bool register_violet = loc_nh.param<bool>("register_to_violet", true);
     std::string violet_ns = loc_nh.param<std::string>("violet_namespace", "violet");
 
     /* Initialize Dynamic reconfigure Server */
     dynamic_reconfigure::Server<airlab_segment::SegmentParamsConfig> server;
-    server.setCallback(euclidean_clustering::dynamicConfigCallback);
+    server.setCallback(dynamicConfigCallback);
 
 
     if(register_violet) {
-        euclidean_clustering::parameters::violet_publish_topic = loc_nh.param<std::string>("violet_detections_topic", "segment_detections");
+        parameters::violet_publish_topic = loc_nh.param<std::string>("violet_detections_topic", "segment_detections");
         ROS_INFO("Waiting for Violet starts up");
-        bool service_exists;
+        bool service_exists = false;
         for ( int i = 0; i < 3 && !(service_exists = ros::service::exists(violet_ns + "/register_source", false)); ++i) { boost::this_thread::sleep_for(boost::chrono::milliseconds(200)); }
 
         if(service_exists) {
             ros::ServiceClient registrationClient = nh.serviceClient<violet_srvs::RegisterSource>(violet_ns + "/register_source");
             violet_srvs::RegisterSource register_srv;
 
-            register_srv.request.topic_name = euclidean_clustering::parameters::violet_publish_topic;
+            register_srv.request.topic_name = parameters::violet_publish_topic;
             register_srv.request.source_algorithm_name = "Segmentation";
-            euclidean_clustering::registered_to_violet = registrationClient.call(register_srv);
-            ROS_INFO("Violet registration is %s ", (euclidean_clustering::registered_to_violet ? "successful" : "unsucessful") );
+            registered_to_violet = registrationClient.call(register_srv);
+            ROS_INFO("Violet registration is %s ", (registered_to_violet ? "successful" : "unsucessful") );
         }
     }
 
-    euclidean_clustering::parameters::vis_pc_publish_topic = loc_nh.param<std::string>("visualization_cloud_topic", "segmented_cloud");
-    euclidean_clustering::vis_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>(euclidean_clustering::parameters::vis_pc_publish_topic, 10);
-    if(euclidean_clustering::registered_to_violet) {
-        euclidean_clustering::segmented_violet_obj_pub = nh.advertise<violet_msgs::DetectionInfo>(euclidean_clustering::parameters::violet_publish_topic, 10);
+    parameters::vis_pc_publish_topic = loc_nh.param<std::string>("visualization_cloud_topic", "segmented_cloud");
+    vis_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>(parameters::vis_pc_publish_topic, 10);
+    if(registered_to_violet) {
+        segmented_violet_obj_pub = nh.advertise<violet_msgs::DetectionInfo>(parameters::violet_publish_topic, 10);
     }
-    ros::Subscriber sub = nh.subscribe(euclidean_clustering::parameters::input_pc_topic, euclidean_clustering::parameters::queue_size, euclidean_clustering::pointCloudCallback);
+    ros::Subscriber sub = nh.subscribe(parameters::input_pc_topic, parameters::queue_size, pointCloudCallback);
 
-    ros::MultiThreadedSpinner spinner(euclidean_clustering::parameters::thread_count);
+    ros::MultiThreadedSpinner spinner(parameters::thread_count);
     spinner.spin();
     return 0;
 }
